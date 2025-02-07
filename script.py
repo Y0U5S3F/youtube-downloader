@@ -9,7 +9,7 @@ def get_video_links_from_playlist(playlist_url):
     video_links = []
     ydl_opts = {
         'extract_flat': True,
-        'quiet': True,  # suppress extra output
+        'quiet': True,  # Suppress extra output.
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -28,14 +28,41 @@ def get_video_links_from_playlist(playlist_url):
 
 def download_video_as_mp3(video_url, output_folder="downloads", wait_time=60):
     """
-    Downloads a video as an MP3. If an error occurs (e.g., due to a temporary IP block),
-    the script will wait for wait_time seconds before retrying. If the error indicates
-    that the video is permanently unavailable (such as when the account is terminated),
-    the video is skipped.
+    Downloads a video as an MP3. Before downloading, it checks if the expected
+    MP3 file already exists (based on the video title) and skips downloading if so.
+    If the video is unavailable (e.g. private, removed, or terminated account),
+    the video is skipped. For other errors (like temporary IP blocks), the script
+    waits wait_time seconds before retrying.
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
-    
+
+    # First, try to extract video info to get the title.
+    info = None
+    try:
+        ydl_opts_info = {
+            'quiet': True,
+            'skip_download': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+    except Exception as e:
+        print(f"Error extracting info for {video_url}: {e}")
+        # If we can't extract info, we'll proceed with the download attempt.
+        info = None
+
+    if info is not None:
+        # Sanitize the title so it matches yt-dlp's filename handling.
+        try:
+            from yt_dlp.utils import sanitize_filename
+            title = sanitize_filename(info.get('title', 'unknown'))
+        except ImportError:
+            title = info.get('title', 'unknown')
+        expected_file = os.path.join(output_folder, f"{title}.mp3")
+        if os.path.exists(expected_file):
+            print(f"File '{expected_file}' already exists. Skipping download for {video_url}.")
+            return
+
     attempts = 0
     while True:
         attempts += 1
@@ -59,11 +86,13 @@ def download_video_as_mp3(video_url, output_folder="downloads", wait_time=60):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             print(f"Successfully downloaded: {video_url}")
-            break  # Download succeeded; exit the loop.
+            break  # Exit loop upon successful download.
         except Exception as e:
             error_str = str(e)
-            # Check if the error indicates the video is permanently unavailable.
-            if "no longer available" in error_str or "Video unavailable" in error_str:
+            # Check for error messages indicating the video is permanently unavailable.
+            if ("no longer available" in error_str or
+                "Video unavailable" in error_str or
+                "Private video" in error_str):
                 print(f"Skipping video {video_url} because it is unavailable: {error_str}")
                 break
             else:
