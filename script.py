@@ -28,8 +28,10 @@ def get_video_links_from_playlist(playlist_url):
 
 def download_video_as_mp3(video_url, output_folder="downloads", wait_time=60):
     """
-    Downloads a video as an mp3. If the download fails (e.g., due to an IP block),
-    waits for a specified time and then retries indefinitely.
+    Downloads a video as an MP3. If an error occurs (e.g., due to a temporary IP block),
+    the script will wait for wait_time seconds before retrying. If the error indicates
+    that the video is permanently unavailable (such as when the account is terminated),
+    the video is skipped.
     """
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -57,11 +59,17 @@ def download_video_as_mp3(video_url, output_folder="downloads", wait_time=60):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([video_url])
             print(f"Successfully downloaded: {video_url}")
-            break  # Exit the loop if download succeeds.
+            break  # Download succeeded; exit the loop.
         except Exception as e:
-            print(f"Error downloading {video_url}: {e}")
-            print(f"Waiting {wait_time} seconds before retrying...")
-            time.sleep(wait_time)
+            error_str = str(e)
+            # Check if the error indicates the video is permanently unavailable.
+            if "no longer available" in error_str or "Video unavailable" in error_str:
+                print(f"Skipping video {video_url} because it is unavailable: {error_str}")
+                break
+            else:
+                print(f"Error downloading {video_url}: {error_str}")
+                print(f"Waiting {wait_time} seconds before retrying...")
+                time.sleep(wait_time)
 
 if __name__ == "__main__":
     try:
@@ -75,10 +83,10 @@ if __name__ == "__main__":
             for idx, link in enumerate(video_links, start=1):
                 print(f"{idx}: {link}")
             
-            download_choice = input("\nDo you want to download these videos as mp3? (yes/no): ").strip().lower()
+            download_choice = input("\nDo you want to download these videos as MP3? (yes/no): ").strip().lower()
             if download_choice in ('yes', 'y'):
                 for link in video_links:
-                    print(f"\nDownloading {link} as mp3...")
+                    print(f"\nDownloading {link} as MP3...")
                     download_video_as_mp3(link)
                 print("\nDownload complete.")
             else:
